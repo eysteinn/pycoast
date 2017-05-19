@@ -32,6 +32,9 @@ logger = logging.getLogger(__name__)
 
 class ContourWriter(ContourWriterBase):
 
+    def test(self):
+        print('test')
+
     """Adds countours from GSHHS and WDBII to images
 
     :Parameters:
@@ -53,21 +56,99 @@ class ContourWriter(ContourWriterBase):
     def _engine_text_draw(self, draw, (x_pos, y_pos), txt, font, **kwargs):
         draw.text((x_pos, y_pos), txt, font=font, fill=kwargs['fill'])
 
+
+    def _fpart(self, x):
+        return x - int(x)
+
+    def _rfpart(self, x):
+        return 1 - self._fpart(x)
+
+    def putpixel(self, img, xy, color, alpha=1):
+        """Paints color over the background at the point xy in img.
+
+        Use alpha for blending. alpha=1 means a completely opaque foreground.
+
+        """
+        #c = tuple(map(lambda bg, fg: int(round(alpha * fg + (1-alpha) * bg)),
+        #              img.getpixel(xy), color))
+        #img.putpixel(xy, c)
+
+        img.point(xy, color)
+
+    def draw_line_2(self, img, p1, p2, color):
+        """Draws an anti-aliased line in img from p1 to p2 with the given color."""
+        x1, y1, x2, y2 = p1 + p2
+        dx, dy = x2-x1, y2-y1
+        steep = abs(dx) < abs(dy)
+        p = lambda px, py: ((px,py), (py,px))[steep]
+
+        if steep:
+            x1, y1, x2, y2, dx, dy = y1, x1, y2, x2, dy, dx
+        if x2 < x1:
+            x1, x2, y1, y2 = x2, x1, y2, y1
+
+        grad = dy/dx
+        intery = y1 + self._rfpart(x1) * grad
+        def draw_endpoint(pt):
+            x, y = pt
+            xend = round(x)
+            yend = y + grad * (xend - x)
+            xgap = self._rfpart(x + 0.5)
+            px, py = int(xend), int(yend)
+            self.putpixel(img, (px, py), color, self._rfpart(yend) * xgap)
+            self.putpixel(img, (px, py+1), color, self._fpart(yend) * xgap)
+            #img.point((px,py), color)
+            #img.point((px, py+1), color)
+            return px
+
+        xstart = draw_endpoint(p(*p1)) + 1
+        xend = draw_endpoint(p(*p2))
+
+        for x in range(xstart, xend):
+            y = int(intery)
+            self.putpixel(img, p(x, y), color, self._rfpart(intery))
+            self.putpixel(img, p(x, y+1), color, self._fpart(intery))
+            #img.point((p(x,y)), color)
+            #img.point((p(x,y+1)), color)
+            intery += grad
+
+
+
     def _draw_polygon(self, draw, coordinates, **kwargs):
         """Draw polygon
         """
+        #draw.polygon(coordinates, fill=kwargs['fill'],
+        #             outline=kwargs['outline'])
+        #draw.line(coordinates, fill=kwargs['fill'], width=kwargs['width'])
+        #coordinates=coordinates[0:40]
+        #img=self._get_canvas(draw)
+        #print(kwargs['fill'])
+        fill = kwargs['fill']
+        if fill:
+            draw.polygon(coordinates, fill=fill)
+        #print(type(img))
+        outline=kwargs['outline']
 
-        draw.polygon(coordinates, fill=kwargs['fill'],
-                     outline=kwargs['outline'])
+        if outline:
+            for i in range(len(coordinates)/2-1):
+                #print((coordinates[i*2],coordinates[i*2+1]),'to',(coordinates[(i+1)*2],coordinates[(i+1)*2+1]))
+                p1=(coordinates[i*2],coordinates[i*2+1])
+                p2=(coordinates[(i+1)*2],coordinates[(i+1)*2+1])
+                #draw.line([p1, p2], fill=kwargs['fill'], width=kwargs['width'])
+                draw.line([p1, p2], fill=outline, width=kwargs['width'])
+
+            #self.draw_line_2(img, p1, p2, kwargs['fill'])
+        #_draw_line(self, draw, coordinates, kwargs)
+
 
     def _draw_ellipse(self, draw, coordinates, **kwargs):
-        """Draw ellipse 
+        """Draw ellipse
         """
         draw.ellipse(coordinates, fill=kwargs['fill'],
                      outline=kwargs['outline'])
 
     def _draw_rectangle(self, draw, coordinates, **kwargs):
-        """Draw rectangle 
+        """Draw rectangle
         """
         draw.rectangle(coordinates, fill=kwargs['fill'],
                        outline=kwargs['outline'])
@@ -84,11 +165,17 @@ class ContourWriter(ContourWriterBase):
         self._draw_text(
             draw, text_position, text, font, align="no", fill=outline)
 
+
+
+
     def _draw_line(self, draw, coordinates, **kwargs):
         """Draw line
         """
-
-        draw.line(coordinates, fill=kwargs['outline'])
+        #print('drawing lines')
+        #coordinates=coordinates[0:40]
+        #for i in range(len(coords)/2-1):
+        #    print((coordinates[i*2],coordinates[i*2+1]),'to',(coordinates[(i+1)*2],coordinates[(i+1)*2+1]))
+        draw.line(coordinates, fill=kwargs['outline'], width=kwargs['width'])
 
     def add_shapefile_shapes(self, image, area_def, filename, feature_type=None,
                              fill=None, outline='white',
@@ -106,7 +193,7 @@ class ContourWriter(ContourWriterBase):
           |     Area extent as a list (LL_x, LL_y, UR_x, UR_y)
         filename : str
             Path to ESRI shape file
-        feature_type : 'polygon' or 'line', 
+        feature_type : 'polygon' or 'line',
             only to override the shape type defined in shapefile, optional
         fill : str or (R, G, B), optional
             Polygon fill color
@@ -147,7 +234,7 @@ class ContourWriter(ContourWriterBase):
             Path to ESRI shape file
         shape_id : int
             integer id of shape in shape file {0; ... }
-        feature_type : 'polygon' or 'line', 
+        feature_type : 'polygon' or 'line',
             only to override the shape type defined in shapefile, optional
         fill : str or (R, G, B), optional
             Polygon fill color
@@ -221,7 +308,7 @@ class ContourWriter(ContourWriterBase):
     def add_grid(self, image, area_def, (Dlon, Dlat), (dlon, dlat),
                  font=None, write_text=True, fill=None, outline='white',
                  minor_outline='white', minor_is_tick=True,
-                 lon_placement='tb', lat_placement='lr'):
+                 lon_placement='tb', lat_placement='lr', line_width=1, antialias=False):
         """Add a lon-lat grid to a PIL image object
 
         :Parameters:
@@ -246,10 +333,20 @@ class ContourWriter(ContourWriterBase):
         minor_is_tick : boolean, optional
             Use tick minor line style (True) or full minor line style (False)
         """
-        self._add_grid(image, area_def, Dlon, Dlat, dlon, dlat, font=font,
+
+        foreground = Image.new('RGBA', image.size, color=(0,0,0,0))
+
+        self._add_grid(foreground, area_def, Dlon, Dlat, dlon, dlat, font=font,
                        write_text=write_text, fill=fill, outline=outline,
                        minor_outline=minor_outline, minor_is_tick=minor_is_tick,
-                       lon_placement=lon_placement, lat_placement=lat_placement)
+                       lon_placement=lon_placement, lat_placement=lat_placement, width=line_width)
+
+        #antialias = True
+        if antialias:
+            from PIL import ImageFilter
+            foreground=foreground.filter(ImageFilter.GaussianBlur(radius=0.5))
+
+        image.paste(foreground,(0,0), foreground)
 
     def add_grid_to_file(self, filename, area_def, (Dlon, Dlat), (dlon, dlat),
                          font=None, write_text=True, fill=None, outline='white',
@@ -289,7 +386,7 @@ class ContourWriter(ContourWriterBase):
         image.save(filename)
 
     def add_coastlines(self, image, area_def, resolution='c', level=1,
-                       fill=None, outline='white', x_offset=0, y_offset=0):
+                       fill=None, outline='white', x_offset=0, y_offset=0, width=1, antialias=False):
         """Add coastlines to a PIL image object
 
         :Parameters:
@@ -312,11 +409,26 @@ class ContourWriter(ContourWriterBase):
         y_offset : float, optional
             Pixel offset in y direction
         """
+        #background=image
 
-        self._add_feature(image, area_def, 'polygon', 'GSHHS',
+        foreground = Image.new('RGBA', image.size, color=(0,0,0,0))
+        #size=image.size
+        #bgcolor=(0,0,0)
+        #background = Image.new('RGBA', size, color=bgcolor)
+
+        self._add_feature(foreground, area_def, 'polygon', 'GSHHS',
                           resolution=resolution, level=level,
                           fill=fill, outline=outline, x_offset=x_offset,
-                          y_offset=y_offset)
+                          y_offset=y_offset, width=width)
+
+        if antialias:
+            from PIL import ImageFilter
+            foreground=foreground.filter(ImageFilter.GaussianBlur(radius=0.5))
+
+        image.paste(foreground,(0,0), foreground)
+
+
+        #image.paste(blurred)
 
     def add_coastlines_to_file(self, filename, area_def, resolution='c',
                                level=1, fill=None, outline='white',
