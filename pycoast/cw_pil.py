@@ -26,7 +26,7 @@ from PIL import Image, ImageFont
 from PIL import ImageDraw
 import logging
 
-from cw_base import ContourWriterBase
+from pycoast.cw_base import ContourWriterBase
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ class ContourWriter(ContourWriterBase):
 
         return ImageDraw.Draw(image)
 
-    def _engine_text_draw(self, draw, (x_pos, y_pos), txt, font, **kwargs):
+    def _engine_text_draw(self, draw, x_pos, y_pos, txt, font, **kwargs):
         draw.text((x_pos, y_pos), txt, font=font, fill=kwargs['fill'])
 
 
@@ -305,10 +305,10 @@ class ContourWriter(ContourWriterBase):
         self._add_polygon(image, area_def, lonlats, x_offset=x_offset,
                           y_offset=y_offset, fill=fill, outline=outline)
 
-    def add_grid(self, image, area_def, (Dlon, Dlat), (dlon, dlat),
+    def add_grid(self, image, area_def, Dlonlat, dlonlat,
                  font=None, write_text=True, fill=None, outline='white',
                  minor_outline='white', minor_is_tick=True,
-                 lon_placement='tb', lat_placement='lr', line_width=1, antialias=False):
+                 lon_placement='tb', lat_placement='lr'):
         """Add a lon-lat grid to a PIL image object
 
         :Parameters:
@@ -316,9 +316,9 @@ class ContourWriter(ContourWriterBase):
             PIL image object
         proj4_string : str
             Projection of area as Proj.4 string
-        (Dlon,Dlat): (float,float)
+        Dlonlat: (float, float)
             Major grid line separation
-        (dlon,dlat): (float,float)
+        dlonlat: (float, float)
             Minor grid line separation
         font: PIL ImageFont object, optional
             Font for major line markings
@@ -333,22 +333,14 @@ class ContourWriter(ContourWriterBase):
         minor_is_tick : boolean, optional
             Use tick minor line style (True) or full minor line style (False)
         """
-
-        foreground = Image.new('RGBA', image.size, color=(0,0,0,0))
-
-        self._add_grid(foreground, area_def, Dlon, Dlat, dlon, dlat, font=font,
+        Dlon, Dlat = Dlonlat
+        dlon, dlat = dlonlat
+        self._add_grid(image, area_def, Dlon, Dlat, dlon, dlat, font=font,
                        write_text=write_text, fill=fill, outline=outline,
                        minor_outline=minor_outline, minor_is_tick=minor_is_tick,
-                       lon_placement=lon_placement, lat_placement=lat_placement, width=line_width)
+                       lon_placement=lon_placement, lat_placement=lat_placement)
 
-        #antialias = True
-        if antialias:
-            from PIL import ImageFilter
-            foreground=foreground.filter(ImageFilter.GaussianBlur(radius=0.5))
-
-        image.paste(foreground,(0,0), foreground)
-
-    def add_grid_to_file(self, filename, area_def, (Dlon, Dlat), (dlon, dlat),
+    def add_grid_to_file(self, filename, area_def, Dlonlat, dlonlat,
                          font=None, write_text=True, fill=None, outline='white',
                          minor_outline='white', minor_is_tick=True,
                          lon_placement='tb', lat_placement='lr'):
@@ -359,9 +351,9 @@ class ContourWriter(ContourWriterBase):
             PIL image object
         proj4_string : str
             Projection of area as Proj.4 string
-        (Dlon,Dlat): (float,float)
+        Dlonlat: (float, float)
             Major grid line separation
-        (dlon,dlat): (float,float)
+        dlonlat: (float, float)
             Minor grid line separation
         font: PIL ImageFont object, optional
             Font for major line markings
@@ -376,9 +368,8 @@ class ContourWriter(ContourWriterBase):
         minor_is_tick : boolean, optional
             Use tick minor line style (True) or full minor line style (False)
         """
-
         image = Image.open(filename)
-        self.add_grid(image, area_def, (Dlon, Dlat), (dlon, dlat), font=font,
+        self.add_grid(image, area_def, Dlonlat, dlonlat, font=font,
                       write_text=write_text, fill=fill, outline=outline,
                       minor_outline=minor_outline,
                       minor_is_tick=minor_is_tick,
